@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Sem --all-extras de propósito: shap, optuna e umap só aparecem em
+      # células comentadas dos notebooks, e arrastam numba/llvmlite na instalação.
+      - name: Montar o ambiente
+        run: uv sync --frozen
+
+      - name: Testes estáticos (grades, scorers, convenções)
+        run: uv run pytest -q
+
+      - name: Executar os três notebooks de ponta a ponta
+        env:
+          MASTER_SCRIPT_FAST: "1"
+        run: uv run pytest -q -m lento
+
+      - name: Conferir que os notebooks estão sem saídas versionadas
+        run: |
+          uv run nbstripout *.ipynb
+          git diff --exit-code -- '*.ipynb' \
+            || { echo "::error::notebook commitado com saídas — rode 'uv run pre-commit install'"; exit 1; }

@@ -7,6 +7,26 @@ do projeto, com um plano de correção priorizado.
 
 ---
 
+## Estado da execução
+
+| Fase | Escopo | Estado |
+|---|---|---|
+| **0** | Os 3 defeitos que impedem a execução | **Feita** |
+| **1** | `tests/`, `MODO_RAPIDO`, CI, `nbstripout` | **Feita** |
+| **2** | Dados sintéticos com sinal (nb 01 e 02) | **Feita** |
+| **3** | Correções de método e robustez | **Feita** |
+| 4 | Documentação (README, INSTALACAO, LICENSE) | Pendente |
+| 5 | Extração de código compartilhado | Não recomendada — ver a seção |
+
+Duas correções entraram fora do que estava planejado, porque a própria verificação as
+revelou: um `TypeError` na célula 5.4 dos notebooks 01 e 02, que aparece quando a família
+vencedora tem hiperparâmetro do tipo objeto (o `estimator` do AdaBoost), e o `vert=` do
+`boxplot`, depreciado no matplotlib 3.11 e removido no 3.13.
+
+O texto abaixo é o diagnóstico original, preservado como registro do que foi encontrado.
+
+---
+
 ## Sumário executivo
 
 O conteúdo é forte. A estrutura de seis etapas repetida nos três notebooks, a separação em
