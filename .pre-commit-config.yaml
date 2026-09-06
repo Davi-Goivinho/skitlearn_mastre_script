@@ -1,0 +1,12 @@
+# Instalar uma vez, depois de `uv sync`:
+#   uv run pre-commit install
+#
+# O nbstripout remove as saídas dos notebooks antes de cada commit. Sem ele, um
+# diff de notebook vira ilegível (gráficos viram base64) e um commit acidental
+# pode carregar traceback de execução abortada e caminhos locais da máquina.
+repos:
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+        files: \.ipynb$

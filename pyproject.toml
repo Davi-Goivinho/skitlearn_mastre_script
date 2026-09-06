@@ -26,7 +26,7 @@ dependencies = [
     "joblib>=1.4",
 
     # --- Graficos ---
-    "matplotlib>=3.8",
+    "matplotlib>=3.10",        # orientation= no boxplot; vert= sai no 3.13
 
     # --- Boosting externo (mesma API do sklearn, entra nos Pipelines) ---
     "xgboost>=2.1",
@@ -75,9 +75,27 @@ dev = [
     "jupyterlab>=4.2",
     "ipykernel>=6.29",
     "ipywidgets>=8.1",         # barras de progresso e widgets
+
+    # --- Testes (ver tests/ e .github/workflows/ci.yml) ---
+    "pytest>=8.3",
+    "nbformat>=5.10",          # leitura dos .ipynb
+    "nbclient>=0.10",          # execucao de ponta a ponta em tests/test_execucao.py
+    "nbstripout>=0.8",         # hook que mantem as saidas fora do Git
+    "pre-commit>=3.8",         # instala o hook: uv run pre-commit install
 ]
 
 [tool.uv]
 # Mantem os notebooks fora do build: este projeto nao e um pacote instalavel.
 package = false
+
+# ---------------------------------------------------------------------------
+# Testes. Por padrao rodam so os estaticos (segundos). Os que executam os
+# notebooks inteiros ficam atras do marcador `lento`:
+#   uv run pytest                                  -> estaticos
+#   MASTER_SCRIPT_FAST=1 uv run pytest -m lento    -> os tres notebooks
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["lento: executa os notebooks de ponta a ponta (minutos)"]
+addopts = "-m 'not lento' --strict-markers"
 
