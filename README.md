@@ -41,9 +41,13 @@
 - [Centróide](#centróide-kmeans-e-variantes) · [Hierárquico](#hierárquico-agglomerative) · [Densidade](#densidade-dbscan-hdbscan-optics) · [Probabilístico](#probabilístico-gaussian-mixture)
 - [Grafo](#grafo-spectral-clustering) · [Outros](#outras-famílias) · [Escolha do k](#como-escolher-o-número-de-clusters) · [Métricas](#métricas-de-clusterização)
 
-**Parte 5 — Aplicando**
-- [Otimização de hiperparâmetros](#parte-5--otimização-de-hiperparâmetros)
-- [Guia rápido de decisão](#parte-6--guia-rápido-de-decisão)
+**Parte 5 — [Séries Temporais](#parte-5--séries-temporais)**
+- [Quebra de I.I.D. e vazamento](#quebra-de-iid-e-vazamento) · [Lags e janelas móveis](#lags-e-janelas-móveis) · [Split temporal](#split-temporal-e-timeseriessplit)
+- [Árvores vs. Lineares na extrapolação](#árvores-vs-lineares-na-extrapolação) · [Modelo híbrido](#modelo-híbrido) · [Métricas e ruído branco](#métricas-temporais-e-ruído-branco)
+
+**Parte 6 — Aplicando**
+- [Otimização de hiperparâmetros](#parte-6--otimização-de-hiperparâmetros)
+- [Guia rápido de decisão](#parte-7--guia-rápido-de-decisão)
 - [Estrutura de arquivos](#estrutura-de-arquivos)
 
 ---
@@ -56,10 +60,11 @@ notebooks trazem o código pronto para copiar:
 | Notebook | Escopo | Famílias |
 |----------|--------|:--------:|
 | [`01_classificacao.ipynb`](01_classificacao.ipynb) | Alvo categórico | 20 |
-| [`02_regressao.ipynb`](02_regressao.ipynb) | Alvo contínuo | 25 |
-| [`03_clusterizacao.ipynb`](03_clusterizacao.ipynb) | Sem alvo | 15 |
+| [`02_regressao.ipynb`](02_regressao.ipynb) | Alvo contínuo | 27 |
+| [`03_clusterizacao.ipynb`](03_clusterizacao.ipynb) | Sem alvo | 14 |
+| [`04_series_temporais.ipynb`](04_series_temporais.ipynb) | Previsão temporal | 22 |
 
-Os três seguem o mesmo fluxo de seis etapas: Data Prep → Split → Pipelines → Validação
+Os quatro seguem o mesmo fluxo de seis etapas: Data Prep → Split → Pipelines → Validação
 Cruzada → Otimização → Prova Final.
 
 Cada modelo aqui segue o mesmo formato: **o que faz** (a intuição matemática), **quando
@@ -1327,7 +1332,100 @@ hora, use 4. Cluster que não vira ação não vale nada.
 
 ---
 
-# Parte 5 — Otimização de hiperparâmetros
+# Parte 5 — Séries Temporais
+
+> Notebook: [`04_series_temporais.ipynb`](04_series_temporais.ipynb)
+
+Previsão temporal (*forecasting*) rompe com a premissa de dados I.I.D. (independentes e
+identicamente distribuídos). Três regras de ferro mudam tudo:
+
+1. **O tempo dita a ordem.** Embaralhar dados (`shuffle=True` ou `KFold` aleatório) vaza o
+   futuro para o passado. A validação parecerá perfeita, mas quebrará em produção.
+2. **Árvores de decisão NÃO extrapolam tendências.** Se a série cresce continuamente para
+   além do valor máximo visto no histórico de treino, um modelo de árvore (RandomForest,
+   LightGBM, XGBoost, CatBoost) preverá uma reta horizontal no teto histórico. Modelos
+   lineares extrapolam a inclinação perfeitamente.
+3. **Persistência é o baseline que importa.** Prever a média global é ingênuo demais. Qualquer
+   modelo de machine learning precisa superar a Persistência ($\hat{y}_t = y_{t-1}$) e a
+   Sazonalidade Ingênua ($\hat{y}_t = y_{t-s}$).
+
+## Quebra de I.I.D. e vazamento
+
+Em aprendizado supervisionado tradicional, a ordem das linhas é irrelevante. Em séries
+temporais, as observações possuem **autocorrelação** e dependência de trajetória.
+
+> [!CAUTION]
+> Os três maiores vazamentos de dados em séries temporais:
+> 1. **Embaralhar o split (`shuffle=True`)**: o modelo usa o amanhã para prever o ontem.
+> 2. **Calcular janelas móveis (`rolling`) sem `.shift(1)`**: a média da janela inclui o
+>    próprio alvo $y_t$ que se deseja prever.
+> 3. **Normalizar o dataset inteiro antes do split**: a média e o desvio calculados carregam
+>    informação de períodos futuros de teste.
+
+## Lags e janelas móveis
+
+Para aplicar os estimadores do scikit-learn em séries temporais, transformamos a série em
+um problema supervisionado tabular $(X, y)$:
+
+| Recurso | Fórmula / Método | O que captura |
+|---------|-----------------|---------------|
+| **Lags curtos** | $y_{t-1}, y_{t-2}, y_{t-3}$ | Inércia imediata e processo autorregressivo |
+| **Lags sazonais** | $y_{t-7}, y_{t-14}$ | Repetição de ciclos semanais / sazonais |
+| **Média móvel segura** | `shift(1).rolling(7).mean()` | Nível local recente sem vazamento |
+| **Volatilidade móvel** | `shift(1).rolling(7).std()` | Dispersão e regimes de incerteza |
+| **Codificação cíclica** | $\sin(2\pi t / T), \cos(2\pi t / T)$ | Continuidade (domingo próximo de segunda) |
+| **Passo linear ($t$)** | $t = 0, 1, 2, \dots$ | Tendência secular contínua |
+
+## Split temporal e TimeSeriesSplit
+
+| Estratégia | Como divide | Quando usar |
+|------------|-------------|-------------|
+| **Corte estrito (80/20)** | Treino = passado, Teste = futuro recente | Split final da prova de inferência |
+| **`TimeSeriesSplit`** | Janela expansiva (Expanding Window): o fold $k+1$ acumula todo o passado do fold $k$ | Padrão para validação cruzada temporal |
+| **Rolling Window** | Janela de tamanho fixo deslizando no tempo | Quando há *concept drift* ou regimes antigos obsoletos |
+| **Gap (Purging/Embargo)** | Espaço de $k$ passos entre fim do treino e início do teste | Evita contaminação de estatísticas móveis longas |
+
+## Árvores vs. Lineares na extrapolação
+
+Árvores realizam partições ortogonais no espaço das variáveis e atribuem como predição a
+média dos exemplos da folha terminal. Elas **só conseguem interpolar**.
+
+- **Se a série tem forte tendência de crescimento secular:** use modelos lineares (`Ridge`,
+  `HuberRegressor`, `SplineRidge`) ou diferencie a série ($\Delta y_t = y_t - y_{t-1}$).
+- **Se a série é estacionária ou oscila em torno de um nível fixo:** modelos de boosting
+  (`HistGradientBoosting`, `LightGBM`, `CatBoost`) dominam devido à capacidade de capturar
+  interações não-lineares complexas entre lags e calendário.
+
+## Modelo híbrido
+
+O padrão de excelência na indústria para unir o melhor dos dois mundos:
+1. Ajuste um modelo linear (`Ridge`) sobre o passo temporal (`tempo_linear`) para capturar e
+   extrapolar a tendência secular.
+2. Calcule os resíduos do treino: $r_t = y_t - \hat{y}_{\text{linear}, t}$.
+3. Ajuste um modelo de boosting (`HistGradientBoostingRegressor`) nos resíduos usando os
+   lags, janelas móveis e variáveis de calendário.
+4. A predição final é a soma das duas previsões: $\hat{y}_t = \hat{y}_{\text{linear}, t} + \hat{r}_{\text{tree}, t}$.
+
+## Métricas temporais e ruído branco
+
+| Métrica | Scorer / Fórmula | Vantagem / Cuidado |
+|---------|------------------|-------------------|
+| **RMSE** | `neg_root_mean_squared_error` | Padrão; penaliza desvios grandes |
+| **MAE** | `neg_mean_absolute_error` | Na unidade real do negócio |
+| **MAPE** | `neg_mean_absolute_percentage_error` | Intuitivo em %, mas **explode se $y \to 0$** |
+| **WAPE** | $\sum \|y - \hat{y}\| / \sum y$ | Ponderado; não sofre com divisão por zero |
+| **MDA** | Acerto de sinal de $\Delta y$ | Acurácia direcional (subida/descida) |
+
+### Diagnóstico de resíduos e teste de ruído branco
+Se um modelo extraiu todo o sinal útil da série, os resíduos no período de teste devem se
+comportar como **ruído branco** (média zero, variância constante e ausência de autocorrelação).
+- Plote o **gráfico de autocorrelação (ACF)** dos resíduos: se as barras ultrapassarem os
+  limites de significância estatística ($\pm 1.96/\sqrt{N}$), significa que restou sinal ou
+  sazonalidade que o modelo não foi capaz de capturar.
+
+---
+
+# Parte 6 — Otimização de hiperparâmetros
 
 | Método | Como funciona | Use quando |
 |--------|---------------|------------|
@@ -1370,13 +1468,15 @@ quase todas as amostras na faixa alta.
 
 ---
 
-# Parte 6 — Guia rápido de decisão
+# Parte 7 — Guia rápido de decisão
 
 ## Por onde começar
 
 | Situação | Comece por |
 |----------|------------|
 | Tabular, qualquer tamanho | **HistGradientBoosting / LightGBM** |
+| Série temporal com tendência | `Ridge`, `HuberRegressor`, modelo híbrido |
+| Série temporal com sazonalidade complexa | `HistGradientBoosting`, `LightGBM` |
 | Precisa explicar a decisão | `LogisticRegression`, `Ridge`, `DecisionTree` raso |
 | Poucas linhas (< 1.000) | `LogisticRegression`, `Ridge`, `SVC`, `LDA`, `GaussianNB` |
 | Muitas colunas, poucas linhas | `LogisticRegression(penalty="l1")`, `Lasso`, `LinearSVC` |
@@ -1403,6 +1503,8 @@ quase todas as amostras na faixa alta.
 | R² negativo | Pior que prever a média | Verifique pré-processo e vazamento invertido |
 | Resíduo em funil | Heterocedasticidade | `log1p` no alvo |
 | Resíduo em U | Falta não-linearidade | Polinômio, spline, ou modelo de árvore |
+| Previsão temporal estagnada no futuro | Árvore com tendência | Use modelo linear ou diferencie a série |
+| Resíduos temporais com autocorrelação | Sazonalidade perdida | Adicione lags sazonais (lag 7) e variáveis cíclicas |
 | Um cluster com 95% dos pontos | Escala ou outlier dominando | `StandardScaler`; trate outliers |
 | DBSCAN devolve tudo como ruído | `eps` pequeno demais | Curva k-distância |
 | Clusters mudam a cada execução | Estrutura frágil, ou `n_init` baixo | Suba `n_init`; teste estabilidade; revise o *k* |
@@ -1414,10 +1516,11 @@ quase todas as amostras na faixa alta.
 2. **SMOTE antes da validação cruzada.** Exemplos sintéticos vazam para os folds de teste.
 3. **Escolher o threshold olhando o teste.** Calibre na validação; o teste é para reportar.
 4. **Embaralhar série temporal.** O modelo aprende o futuro.
-5. **Deixar a mesma entidade nos dois lados do split.** O modelo decora, não generaliza.
-6. **Abrir o teste mais de uma vez.** Olhar, ajustar e olhar de novo transforma o teste em
+5. **Calcular janelas móveis sem `.shift(1)`.** O alvo entra na média das variáveis de entrada.
+6. **Deixar a mesma entidade nos dois lados do split.** O modelo decora, não generaliza.
+7. **Abrir o teste mais de uma vez.** Olhar, ajustar e olhar de novo transforma o teste em
    validação — e a estimativa deixa de ser honesta.
-7. **Deixar um ID numérico entre as variáveis.** Especialmente destrutivo em clusterização.
+8. **Deixar um ID numérico entre as variáveis.** Especialmente destrutivo em clusterização.
 
 ---
 
@@ -1448,8 +1551,9 @@ Testado com **48 verificações** cobrindo as APIs que os notebooks usam.
 ```
 .
 ├── 01_classificacao.ipynb    # 20 famílias, alvo categórico
-├── 02_regressao.ipynb        # 25 famílias, alvo contínuo
-├── 03_clusterizacao.ipynb    # 15 famílias, sem alvo
+├── 02_regressao.ipynb        # 27 famílias, alvo contínuo
+├── 03_clusterizacao.ipynb    # 14 famílias, sem alvo
+├── 04_series_temporais.ipynb # 22 famílias, previsão temporal
 ├── pyproject.toml            # dependências e extras opcionais
 ├── uv.lock                   # 139 pacotes com versão exata
 ├── .python-version           # 3.14

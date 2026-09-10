@@ -9,7 +9,7 @@ from sklearn.base import clone
 from sklearn.metrics import get_scorer_names
 from sklearn.model_selection import ParameterSampler
 
-TAGS = ["01", "02", "03"]
+TAGS = ["01", "02", "03", "04"]
 
 # Famílias declaradas em PIPELINES que legitimamente não têm grade: baselines e
 # modelos sem hiperparâmetro. Qualquer outra ausência é esquecimento e quebra a
@@ -18,11 +18,12 @@ SEM_GRADE = {
     "01": {"Dummy"},
     "02": {"Dummy", "LinearRegression"},
     "03": set(),
+    "04": {"Dummy", "Persistence", "SeasonalNaive", "LinearRegression"},
 }
 
 # Contagem por notebook. Fixada aqui para que o número deixe de ser algo escrito
 # à mão na documentação e passe a ser verificável.
-N_FAMILIAS = {"01": 20, "02": 27, "03": 14}
+N_FAMILIAS = {"01": 20, "02": 27, "03": 14, "04": 22}
 
 
 @pytest.mark.parametrize("tag", TAGS)
@@ -32,7 +33,7 @@ def test_contagem_de_familias(tag, ns):
 
 # O nb 03 monta scorers próprios (funções), porque clusterização não tem y.
 # Nos supervisionados o SCORING é feito de nomes do registro do sklearn.
-SCORERS_POR_NOME = {"01", "02"}
+SCORERS_POR_NOME = {"01", "02", "04"}
 
 
 @pytest.mark.parametrize("tag", TAGS)
