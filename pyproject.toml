@@ -1,7 +1,7 @@
 [project]
 name = "sklearn-master-script"
 version = "1.0.0"
-description = "Guia de consulta de scikit-learn: pipelines e grades de hiperparametros para classificacao, regressao e clusterizacao"
+description = "Guia de consulta de scikit-learn: pipelines e grades de hiperparametros para classificacao, regressao, clusterizacao, series temporais e anomalias"
 readme = "README.md"
 requires-python = ">=3.12"
 

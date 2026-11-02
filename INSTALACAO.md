@@ -64,7 +64,7 @@ uv run python meu_script.py
 
 ## 4. O que é instalado por padrão
 
-Tudo que os três notebooks importam na célula de setup:
+Tudo que os notebooks importam na célula de setup:
 
 | Pacote | Papel | Versão travada |
 |---|---|---|

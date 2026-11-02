@@ -45,9 +45,12 @@
 - [Quebra de I.I.D. e vazamento](#quebra-de-iid-e-vazamento) · [Lags e janelas móveis](#lags-e-janelas-móveis) · [Split temporal](#split-temporal-e-timeseriessplit)
 - [Árvores vs. Lineares na extrapolação](#árvores-vs-lineares-na-extrapolação) · [Modelo híbrido](#modelo-híbrido) · [Métricas e ruído branco](#métricas-temporais-e-ruído-branco)
 
-**Parte 6 — Aplicando**
-- [Otimização de hiperparâmetros](#parte-6--otimização-de-hiperparâmetros)
-- [Guia rápido de decisão](#parte-7--guia-rápido-de-decisão)
+**Parte 6 — [Detecção de Anomalias](#parte-6--detecção-de-anomalias)**
+- [Outlier ou novelty](#outlier-ou-novelty) · [As famílias](#as-famílias) · [Sem rótulo para avaliar](#sem-rótulo-para-avaliar)
+
+**Aplicando**
+- [Otimização de hiperparâmetros](#parte-7--otimização-de-hiperparâmetros)
+- [Guia rápido de decisão](#parte-8--guia-rápido-de-decisão)
 - [Estrutura de arquivos](#estrutura-de-arquivos)
 
 ---
@@ -1425,7 +1428,49 @@ comportar como **ruído branco** (média zero, variância constante e ausência 
 
 ---
 
-# Parte 6 — Otimização de hiperparâmetros
+# Parte 6 — Detecção de Anomalias
+
+> Notebook: [`05_anomalias.ipynb`](05_anomalias.ipynb)
+
+Detectar anomalias é ordenar linhas da mais estranha para a mais comum. O `fit` ignora o `y`;
+o rótulo, quando existe, serve só para avaliar e ajustar. Três regras mudam em relação à
+classificação:
+
+1. **O sinal do escore é invertido.** No scikit-learn, `decision_function` positivo é normal.
+   Para medir, use `-modelo.decision_function(X)`.
+2. **Acurácia não serve.** Com 4% de anomalias, chamar tudo de normal acerta 96%. Use PR-AUC,
+   cujo valor ao acaso é a própria prevalência, e precisão no top-k.
+3. **`contamination` não muda o ranking.** Ele só define o corte de `predict`. O limiar é uma
+   decisão separada, tomada pela capacidade de investigação ou pelo custo dos erros.
+
+## Outlier ou novelty
+
+| Modo | Pergunta | Como usar |
+|------|----------|-----------|
+| **Outlier detection** | O que é estranho nesta base? | `LocalOutlierFactor().fit_predict(X)` |
+| **Novelty detection** | Esta linha nova é estranha? | `LocalOutlierFactor(novelty=True).fit(X)` e depois `predict` |
+
+## As famílias
+
+| Família | Ideia | Modelos no notebook |
+|---------|-------|---------------------|
+| **Baselines** | O mínimo a superar | `Aleatorio`, `ZScore` |
+| **Isolamento** | Anomalias se separam com poucos cortes | `IsolationForest` |
+| **Densidade e distância** | Longe ou menos denso que os vizinhos | `LOF`, `KNN`, `KMeans` |
+| **Fronteira** | Uma superfície envolve o normal | `OneClassSVM`, `SGDOneClassSVM` |
+| **Estatística** | Pouco provável sob a distribuição | `EllipticEnvelope`, `GMM` |
+| **Reconstrução** | O normal é fácil de comprimir | `PCA`, `Autoencoder` |
+| **Ensemble** | Média dos percentis de vários detectores | `EnsembleRanks` |
+
+## Sem rótulo para avaliar
+
+Sem nenhum rótulo, não há como medir acerto. O que dá para medir é a **estabilidade do top-k**:
+ajustar em duas subamostras e ver quanto as listas de casos mais suspeitos coincidem. Isso
+descarta configurações instáveis, mas não prova que a lista está certa.
+
+---
+
+# Parte 7 — Otimização de hiperparâmetros
 
 | Método | Como funciona | Use quando |
 |--------|---------------|------------|
@@ -1468,7 +1513,7 @@ quase todas as amostras na faixa alta.
 
 ---
 
-# Parte 7 — Guia rápido de decisão
+# Parte 8 — Guia rápido de decisão
 
 ## Por onde começar
 
@@ -1554,6 +1599,7 @@ Testado com **48 verificações** cobrindo as APIs que os notebooks usam.
 ├── 02_regressao.ipynb        # 27 famílias, alvo contínuo
 ├── 03_clusterizacao.ipynb    # 14 famílias, sem alvo
 ├── 04_series_temporais.ipynb # 22 famílias, previsão temporal
+├── 05_anomalias.ipynb        # 13 famílias, escore de anomalia
 ├── pyproject.toml            # dependências e extras opcionais
 ├── uv.lock                   # 139 pacotes com versão exata
 ├── .python-version           # 3.14

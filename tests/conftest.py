@@ -20,6 +20,7 @@ NOTEBOOKS = {
     "02": RAIZ / "02_regressao.ipynb",
     "03": RAIZ / "03_clusterizacao.ipynb",
     "04": RAIZ / "04_series_temporais.ipynb",
+    "05": RAIZ / "05_anomalias.ipynb",
 }
 
 # A seção 4 é o torneio: roda cross_validate em todas as famílias. Nada dela é
