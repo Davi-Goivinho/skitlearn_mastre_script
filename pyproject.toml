@@ -18,23 +18,20 @@ dependencies = [
     "pandas>=2.2",             # groupby.apply(include_groups=) usado no nb 02
     "scipy>=1.13",             # loguniform / uniform / randint das grades
     "pyarrow>=16.0",           # leitura e escrita de .parquet
-
     # --- scikit-learn ---
     # >=1.6 garante: HDBSCAN, root_mean_squared_error, TargetEncoder,
     # PredictionErrorDisplay, class_weight no HistGradientBoosting e set_output.
     "scikit-learn>=1.6",
     "joblib>=1.4",
-
     # --- Graficos ---
     "matplotlib>=3.10",        # orientation= no boxplot; vert= sai no 3.13
-
     # --- Boosting externo (mesma API do sklearn, entra nos Pipelines) ---
     "xgboost>=2.1",
     "lightgbm>=4.5",
     "catboost>=1.2.7",
-
     # --- Desbalanceamento (SMOTE e o Pipeline proprio) — nb 01 ---
     "imbalanced-learn>=0.13",
+    "statsmodels>=0.14",
 ]
 
 # ---------------------------------------------------------------------------

@@ -24,7 +24,7 @@ SEM_GRADE = {
 
 # Contagem por notebook. Fixada aqui para que o número deixe de ser algo escrito
 # à mão na documentação e passe a ser verificável.
-N_FAMILIAS = {"01": 20, "02": 27, "03": 14, "04": 22, "05": 13}
+N_FAMILIAS = {"01": 20, "02": 27, "03": 14, "04": 23, "05": 13}
 
 
 @pytest.mark.parametrize("tag", TAGS)

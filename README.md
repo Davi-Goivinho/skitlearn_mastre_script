@@ -43,7 +43,7 @@
 
 **Parte 5 — [Séries Temporais](#parte-5--séries-temporais)**
 - [Quebra de I.I.D. e vazamento](#quebra-de-iid-e-vazamento) · [Lags e janelas móveis](#lags-e-janelas-móveis) · [Split temporal](#split-temporal-e-timeseriessplit)
-- [Árvores vs. Lineares na extrapolação](#árvores-vs-lineares-na-extrapolação) · [Modelo híbrido](#modelo-híbrido) · [Métricas e ruído branco](#métricas-temporais-e-ruído-branco)
+- [Árvores vs. Lineares na extrapolação](#árvores-vs-lineares-na-extrapolação) · [Modelo híbrido](#modelo-híbrido) · [Previsão multi-passo](#previsão-multi-passo) · [Métricas e ruído branco](#métricas-temporais-e-ruído-branco)
 
 **Parte 6 — [Detecção de Anomalias](#parte-6--detecção-de-anomalias)**
 - [Outlier ou novelty](#outlier-ou-novelty) · [As famílias](#as-famílias) · [Sem rótulo para avaliar](#sem-rótulo-para-avaliar)
@@ -1401,13 +1401,31 @@ média dos exemplos da folha terminal. Elas **só conseguem interpolar**.
 
 ## Modelo híbrido
 
-O padrão de excelência na indústria para unir o melhor dos dois mundos:
+Uma forma de combinar a extrapolação do modelo linear com a flexibilidade do boosting:
 1. Ajuste um modelo linear (`Ridge`) sobre o passo temporal (`tempo_linear`) para capturar e
    extrapolar a tendência secular.
 2. Calcule os resíduos do treino: $r_t = y_t - \hat{y}_{\text{linear}, t}$.
 3. Ajuste um modelo de boosting (`HistGradientBoostingRegressor`) nos resíduos usando os
    lags, janelas móveis e variáveis de calendário.
 4. A predição final é a soma das duas previsões: $\hat{y}_t = \hat{y}_{\text{linear}, t} + \hat{r}_{\text{tree}, t}$.
+
+> [!WARNING]
+> Não é garantia de ganho. No torneio do notebook, ele ficou atrás até do baseline sazonal:
+> os lags continuam com a tendência, e as árvores não extrapolam neles. Meça sempre.
+
+## Previsão multi-passo
+
+Métricas calculadas com os lags reais valem para **um passo à frente**. Para prever vários dias,
+os lags futuros ainda não existem:
+
+| Estratégia | Como funciona | Risco |
+|------------|---------------|-------|
+| **Recursiva** | Um modelo; cada previsão vira lag da seguinte | O erro pode se acumular |
+| **Direta** | Um modelo por horizonte, com lags da data de origem | Treina vários modelos |
+| **SARIMAX** | Modela a própria série, com diferenciação e sazonalidade | Menos flexível com muitas variáveis |
+
+Compare sempre por horizonte, em várias origens, e use só variáveis exógenas conhecidas na data
+prevista, como um calendário de promoções já planejado.
 
 ## Métricas temporais e ruído branco
 
@@ -1425,6 +1443,7 @@ comportar como **ruído branco** (média zero, variância constante e ausência 
 - Plote o **gráfico de autocorrelação (ACF)** dos resíduos: se as barras ultrapassarem os
   limites de significância estatística ($\pm 1.96/\sqrt{N}$), significa que restou sinal ou
   sazonalidade que o modelo não foi capaz de capturar.
+- Confirme com o **teste de Ljung-Box** (`statsmodels`): $p < 0{,}05$ indica autocorrelação restante.
 
 ---
 
@@ -1520,7 +1539,7 @@ quase todas as amostras na faixa alta.
 | Situação | Comece por |
 |----------|------------|
 | Tabular, qualquer tamanho | **HistGradientBoosting / LightGBM** |
-| Série temporal com tendência | `Ridge`, `HuberRegressor`, modelo híbrido |
+| Série temporal com tendência | `Ridge`, `HuberRegressor`; híbrido só se superar os dois na medição |
 | Série temporal com sazonalidade complexa | `HistGradientBoosting`, `LightGBM` |
 | Precisa explicar a decisão | `LogisticRegression`, `Ridge`, `DecisionTree` raso |
 | Poucas linhas (< 1.000) | `LogisticRegression`, `Ridge`, `SVC`, `LDA`, `GaussianNB` |
@@ -1598,7 +1617,7 @@ Testado com **48 verificações** cobrindo as APIs que os notebooks usam.
 ├── 01_classificacao.ipynb    # 20 famílias, alvo categórico
 ├── 02_regressao.ipynb        # 27 famílias, alvo contínuo
 ├── 03_clusterizacao.ipynb    # 14 famílias, sem alvo
-├── 04_series_temporais.ipynb # 22 famílias, previsão temporal
+├── 04_series_temporais.ipynb # 23 famílias, previsão temporal
 ├── 05_anomalias.ipynb        # 13 famílias, escore de anomalia
 ├── pyproject.toml            # dependências e extras opcionais
 ├── uv.lock                   # 139 pacotes com versão exata
