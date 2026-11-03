@@ -35,7 +35,7 @@
 
 **Parte 3 — [Regressão](#parte-3--regressão)**
 - [Lineares](#lineares-regularizados) · [Robustos](#lineares-robustos) · [GLM](#glm-modelos-lineares-generalizados) · [Não-linearidade explícita](#não-linearidade-explícita)
-- [Kernel](#métodos-de-kernel) · [Árvores e ensembles](#árvores-e-ensembles-em-regressão) · [Transformação do alvo](#transformação-do-alvo) · [Métricas](#métricas-de-regressão)
+- [Kernel](#métodos-de-kernel) · [Árvores e ensembles](#árvores-e-ensembles-em-regressão) · [Transformação do alvo](#transformação-do-alvo) · [Intervalos conformais](#intervalos-conformais-mapie) · [Métricas](#métricas-de-regressão)
 
 **Parte 4 — [Clusterização](#parte-4--clusterização)**
 - [Centróide](#centróide-kmeans-e-variantes) · [Hierárquico](#hierárquico-agglomerative) · [Densidade](#densidade-dbscan-hdbscan-optics) · [Probabilístico](#probabilístico-gaussian-mixture)
@@ -43,7 +43,7 @@
 
 **Parte 5 — [Séries Temporais](#parte-5--séries-temporais)**
 - [Quebra de I.I.D. e vazamento](#quebra-de-iid-e-vazamento) · [Lags e janelas móveis](#lags-e-janelas-móveis) · [Split temporal](#split-temporal-e-timeseriessplit)
-- [Árvores vs. Lineares na extrapolação](#árvores-vs-lineares-na-extrapolação) · [Modelo híbrido](#modelo-híbrido) · [Previsão multi-passo](#previsão-multi-passo) · [Métricas e ruído branco](#métricas-temporais-e-ruído-branco)
+- [Árvores vs. Lineares na extrapolação](#árvores-vs-lineares-na-extrapolação) · [Modelo híbrido](#modelo-híbrido) · [Previsão multi-passo](#previsão-multi-passo) · [Intervalos](#intervalos-em-série-temporal) · [Métricas e ruído branco](#métricas-temporais-e-ruído-branco)
 
 **Parte 6 — [Detecção de Anomalias](#parte-6--detecção-de-anomalias)**
 - [Outlier ou novelty](#outlier-ou-novelty) · [As famílias](#as-famílias) · [Sem rótulo para avaliar](#sem-rótulo-para-avaliar)
@@ -1067,6 +1067,50 @@ cruzada, e devolve as métricas na **escala original** — que é a que o negóc
 Como decidir: se `y.skew() > 1`, teste. O notebook 02 tem uma célula que roda o torneio
 inteiro com e sem log e mostra o ganho por modelo.
 
+## Intervalos conformais (MAPIE)
+
+Uma previsão pontual não diz o quanto confiar nela. A regressão quantílica dá um intervalo,
+mas nada garante que os 90% prometidos aconteçam em dados novos. A predição conforme adiciona
+essa garantia: mede os erros em dados que o modelo não viu e usa o quantil deles como margem.
+Funciona com qualquer modelo e não supõe uma distribuição para o erro.
+
+```python
+from mapie.regression import CrossConformalRegressor
+
+modelo = CrossConformalRegressor(
+    pipeline, confidence_level=0.90, method="plus", cv=5
+).fit_conformalize(X_train, y_train)
+previsao, intervalo = modelo.predict_interval(X_test)
+inferior, superior = intervalo[:, 0, 0], intervalo[:, 1, 0]
+```
+
+A garantia é de cobertura **média**, com dados permutáveis (mesma distribuição, sem ordem
+temporal). Ela não vale para cada faixa de valor. No notebook 02 (célula 6.4b), com alvo de
+90% e 240 linhas de teste (oscilação de cerca de ±3,8% só por acaso):
+
+| Método | Cobertura | Largura: previsão baixa | Largura: previsão alta | Cobertura: baixa / alta |
+|---|---|---|---|---|
+| Quantílica pura | 83,8% | 247 mil | 407 mil | 80,0% / 90,0% |
+| CV+ absoluto | 90,0% | 368 mil | 368 mil | 97,5% / 83,8% |
+| CV+ `gamma` | 86,7% | 259 mil | 518 mil | 83,8% / 93,8% |
+| CQR | 86,7% | 314 mil | 484 mil | 83,8% / 92,5% |
+
+Só a quantílica pura ficou abaixo da margem de oscilação. A margem fixa acertou a média
+cobrindo demais os casos baratos e de menos os caros. As margens adaptativas distribuem melhor
+a largura, mas aqui inverteram o desequilíbrio em vez de eliminá-lo.
+
+| Situação | Use |
+|---|---|
+| Qualquer modelo, erro de tamanho parecido em toda a faixa | `CrossConformalRegressor`, escore absoluto |
+| Erro proporcional ao valor, alvo positivo | escore `"gamma"`, com previsões sempre positivas |
+| Erro que muda com as variáveis | `ConformalizedQuantileRegressor` (CQR) |
+| Série temporal | [veja a Parte 5](#intervalos-em-série-temporal) |
+
+> [!CAUTION]
+> `conformity_score="gamma"` levanta `ValueError` se alguma previsão for negativa: use alvo em
+> log. No MAPIE 1.6, o `SplitConformalRegressor` recusa `TransformedTargetRegressor`; o
+> `CrossConformalRegressor` aceita. E nunca calibre no teste: a cobertura medida deixa de valer.
+
 ## Métricas de regressão
 
 | Métrica | O que mede | Cuidado |
@@ -1451,6 +1495,33 @@ os lags futuros ainda não existem:
 Compare sempre por horizonte, em várias origens, e use só variáveis exógenas conhecidas na data
 prevista, como um calendário de promoções já planejado.
 
+## Intervalos em série temporal
+
+Uma série tem ordem, então não é permutável, e a calibração precisa sempre usar o passado. O
+notebook 04 (célula 6.4b) compara os métodos com alvo de 80% em 217 dias de teste. As duas
+últimas colunas simulam um aumento repentino do ruído na metade do teste:
+
+| Método | Cobertura | Largura | Cobertura após o choque | Largura após o choque |
+|---|---|---|---|---|
+| Quantílica | 87,6% | 57,0 | 86,2% | 56,8 |
+| Split temporal | 78,8% | 14,9 | 64,2% | 14,9 |
+| EnbPI | 85,3% | 16,1 | 60,6% | 16,1 |
+| Janela móvel (60 dias) | 83,9% | 15,2 | 78,9% | 19,7 |
+
+A quantílica só cobre bem porque é quase 4 vezes mais larga. Entre os métodos estreitos, a
+janela móvel foi a única que manteve a cobertura depois do choque, pois usa apenas os erros
+recentes. Ela é de poucas linhas e dispensa o MAPIE. Um único choque simulado ilustra o
+mecanismo, mas não prova que ela seja sempre melhor.
+
+**Estes intervalos valem para 1 dia à frente**, porque os lags do teste usam valores reais. Eles
+não valem para a projeção recursiva, em que o erro se acumula: lá, a margem precisa ser
+calibrada por horizonte, com os erros de um backtest.
+
+> [!CAUTION]
+> No MAPIE 1.6, `update()` do EnbPI reage devagar, porque a janela de erros tem o tamanho do
+> treino. Já `method="aci"` percorre `X` com `zip(X, y)` e quebra com pipelines que selecionam
+> colunas de um DataFrame por nome.
+
 ## Métricas temporais e ruído branco
 
 | Métrica | Scorer / Fórmula | Vantagem / Cuidado |
@@ -1572,7 +1643,7 @@ quase todas as amostras na faixa alta.
 | Texto (TF-IDF) | `LinearSVC`, `ComplementNB`, `LogisticRegression` |
 | Categóricas de alta cardinalidade | `CatBoost`, `HistGradientBoosting` |
 | Precisa extrapolar | Modelo linear — árvores não extrapolam |
-| Precisa de intervalo de predição | Regressão quantílica, `BayesianRidge`, `GaussianProcess` |
+| Precisa de intervalo de predição | Conformal com MAPIE, regressão quantílica, `BayesianRidge` |
 | Alvo = contagem | `PoissonRegressor`, `HistGB(loss="poisson")` |
 | Outliers pesados | `Huber`, `RANSAC`, `loss="absolute_error"`, HDBSCAN |
 | Não sabe quantos grupos | `HDBSCAN`, `BayesianGMM` |

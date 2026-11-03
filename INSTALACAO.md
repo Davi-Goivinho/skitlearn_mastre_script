@@ -80,6 +80,7 @@ Tudo que os notebooks importam na célula de setup:
 | `catboost` | boosting externo | 1.2.10 |
 | `imbalanced-learn` | SMOTE e `ImbPipeline` (notebook 01) | 0.14.2 |
 | `statsmodels` | SARIMAX e teste de Ljung-Box (notebook 04) | 0.15.0 |
+| `mapie` | intervalos conformais (notebooks 02 e 04) | 1.6.0 |
 | `jupyterlab` + `ipykernel` + `ipywidgets` | ambiente de trabalho (grupo `dev`) | 4.6.2 |
 
 O `scikit-learn` está fixado em `>=1.6` porque os notebooks usam `HDBSCAN`,
