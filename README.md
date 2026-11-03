@@ -745,9 +745,33 @@ RandomForestClassifier(class_weight="balanced_subsample")
 XGBClassifier(scale_pos_weight=n_neg/n_pos)
 ```
 
-**2. Ajuste do threshold.** Treine normalmente e escolha o corte pela curva
-Precisão-Revocação. Frequentemente é a melhor relação custo-benefício — nenhum
-retreinamento envolvido.
+**2. Ajuste do threshold.** Treine normalmente e escolha o corte depois, pelo critério
+que importa ao negócio. Frequentemente é a melhor relação custo-benefício. O
+`TunedThresholdClassifierCV` faz essa escolha por validação cruzada e guarda o corte dentro
+do modelo: `predict()` já o aplica.
+
+```python
+def custo_medio(y_true, y_pred):
+    fn = ((y_true == 1) & (y_pred == 0)).sum()
+    fp = ((y_true == 0) & (y_pred == 1)).sum()
+    return (10 * fn + 1 * fp) / len(y_true)
+
+modelo = TunedThresholdClassifierCV(
+    pipeline, scoring=make_scorer(custo_medio, greater_is_better=False), cv=5
+).fit(X_train, y_train)
+modelo.best_threshold_
+```
+
+`greater_is_better=False` é obrigatório em uma função de custo: sem ele, a busca escolhe o
+**pior** corte, sem nenhum erro. Se o corte já foi decidido, use
+`FixedThresholdClassifier(FrozenEstimator(modelo_treinado), threshold=corte)`. Sem o
+`FrozenEstimator`, o `fit` treina o modelo de novo.
+
+No notebook 01 (célula 6.5b), o vencedor tem ROC-AUC de 0,84, mas com o corte padrão não
+prevê nenhum churn: recall 0 e custo de 1,50 por cliente, com erro de FN custando 10 vezes o
+de FP. O corte de 0,257 leva o recall a 0,90 e o custo a 0,59, sem mudar o modelo. Mover o
+corte só escolhe um ponto da curva Precisão-Revocação que já existe. Ele também depende da
+prevalência do treino: se ela mudar em produção, é preciso recalibrar.
 
 **3. Reamostragem.** SMOTE gera exemplos sintéticos da classe minoritária interpolando
 vizinhos. Precisa do `ImbPipeline` do `imbalanced-learn`, porque a reamostragem só pode
